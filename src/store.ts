@@ -52,6 +52,7 @@ export interface PromptEntry {
   id: string;
   title: string;
   text: string;
+  cat?: string;
 }
 
 export interface Config {
@@ -80,11 +81,18 @@ export interface Config {
   tokens: number;
 }
 
+export interface ModelInfo {
+  id: string;
+  ctx?: number;
+  vision?: boolean;
+  avail?: boolean;
+}
+
 export interface AppState {
   cfg: Config;
   chats: Chat[];
   saved: SearchResult[];
-  models: string[];
+  models: ModelInfo[];
   mem: MemEntry[];
   prompts: PromptEntry[];
   active: string | null;
@@ -97,6 +105,7 @@ export interface AppState {
   net: string;
   banner: { msg: string; ok: boolean } | null;
   modal: string | null;
+  modalData?: any;
   rq: string;
 }
 
@@ -146,7 +155,7 @@ export function getInitialState(): AppState {
     cfg,
     chats: db.g('chats', []),
     saved: db.g('saved', []),
-    models: db.g('models', []),
+    models: (db.g('models', []) || []) as ModelInfo[],
     mem: db.g('mem', []),
     prompts: Array.isArray(prompts) ? prompts : defaultPrompts(),
     active: null,
@@ -191,7 +200,7 @@ type Action =
   | { type: 'ADD_ATT'; src: string }
   | { type: 'DEL_ATT'; idx: number }
   | { type: 'CLEAR_ATTS' }
-  | { type: 'SET_MODELS'; models: string[] }
+  | { type: 'SET_MODELS'; models: ModelInfo[] }
   | { type: 'SET_RQ'; v: string }
   | { type: 'ADD_PROMPT'; p: PromptEntry }
   | { type: 'DEL_PROMPT'; id: string }
