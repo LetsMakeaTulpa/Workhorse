@@ -1,0 +1,12 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+fieldwork.db
+*.sqlite
+*.sqlite3
+.DS_Store
