@@ -226,9 +226,10 @@ async def chat_stream(body: ChatRequest):
                 question=body.message, history=history, providers=body.providers,
                 search_enabled=body.search_enabled, depth=body.depth, category=body.category,
                 time_range=body.time_range, system_prompt=body.system_prompt,
-                search_query=body.search_query,
+                search_query=body.search_query, model=model,
             )
             sources, provider_status = prepared["sources"], prepared["providers"]
+            yield _sse("plan", {"queries": prepared.get("search_plan", [])})
             yield _sse("sources", {"items": sources, "providers": provider_status})
 
             answer_parts: list[str] = []
