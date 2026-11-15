@@ -32,6 +32,19 @@ class SearchRequest(BaseModel):
     category: str | None = None
     time_range: str | None = None
 
+class LibraryCreate(BaseModel):
+    id: str | None = Field(default=None, max_length=36)
+    kind: str = Field(min_length=1, max_length=32)
+    title: str = Field(min_length=1, max_length=240)
+    payload: dict[str, Any]
+
+    @field_validator("kind")
+    @classmethod
+    def supported_library_kind(cls, value: str) -> str:
+        if value not in {"saved_search", "preset"}:
+            raise ValueError("Library kind must be saved_search or preset.")
+        return value
+
 class ConversationUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=240)
     archived: bool | None = None
