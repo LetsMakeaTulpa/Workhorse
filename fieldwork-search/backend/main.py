@@ -32,6 +32,7 @@ app.add_middleware(CORSMiddleware, allow_origins=_origins, allow_credentials=Fal
                    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
                    allow_headers=["Content-Type", "X-App-Password"])
 STATIC_DIR = Path(__file__).parent / "static"
+DIST_DIR = Path(__file__).resolve().parents[2] / "dist"
 
 
 @app.on_event("startup")
@@ -101,6 +102,9 @@ def _sse(event: str, payload: dict[str, Any]) -> str:
 
 @app.get("/", include_in_schema=False)
 def home():
+    built_frontend = DIST_DIR / "index.html"
+    if built_frontend.exists():
+        return FileResponse(built_frontend)
     return FileResponse(STATIC_DIR / "index.html")
 
 
@@ -311,4 +315,6 @@ async def chat_stream(body: ChatRequest):
         headers={"Cache-Control": "no-cache, no-transform", "Connection": "keep-alive", "X-Accel-Buffering": "no"})
 
 
+if (DIST_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
