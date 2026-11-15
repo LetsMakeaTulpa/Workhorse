@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: fieldwork-search
+    runtime: python
+    plan: free
+    rootDir: fieldwork-search
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: FEATHERLESS_API_KEY
+        sync: false
+      - key: EXA_API_KEY
+        sync: false
+      - key: SEARXNG_URL
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: FEATHERLESS_MODEL_ID
+        value: darkc0de/XORTRON-RICO-v3
+      - key: XORTRON_AGENT_MODEL_ID
+        value: darkc0de/XORTRON-AgentRICO
