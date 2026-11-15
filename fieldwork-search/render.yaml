@@ -1,13 +1,14 @@
 services:
   - type: web
-    name: fieldwork-search
+    name: workhorse
     runtime: python
     plan: free
-    rootDir: fieldwork-search
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: npm ci && npm run build && cd fieldwork-search && pip install -r requirements.txt
+    startCommand: cd fieldwork-search && uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
+      - key: NODE_VERSION
+        value: 22.20.0
       - key: FEATHERLESS_API_KEY
         sync: false
       - key: EXA_API_KEY
@@ -22,10 +23,10 @@ services:
         sync: false
       - key: APP_PASSWORD
         sync: false
-      - key: CORS_ORIGINS
-        value: http://localhost:5173,http://127.0.0.1:5173,https://letsmakeatulpa.github.io
       - key: DATABASE_URL
         sync: false
+      - key: CORS_ORIGINS
+        value: http://localhost:5173,http://127.0.0.1:5173,https://letsmakeatulpa.github.io
       - key: FEATHERLESS_MODEL_ID
         value: darkc0de/XORTRON-RICO-v3
       - key: XORTRON_AGENT_MODEL_ID
