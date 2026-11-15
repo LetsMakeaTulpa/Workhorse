@@ -21,7 +21,7 @@ class ChatRequest(BaseModel):
     @field_validator("providers")
     @classmethod
     def only_supported_providers(cls, value: list[str]) -> list[str]:
-        allowed = {"exa", "searxng"}
+        allowed = {"exa", "searxng", "brave", "tavily", "serper"}
         return list(dict.fromkeys(p for p in value if p in allowed))
 
 class SearchRequest(BaseModel):
