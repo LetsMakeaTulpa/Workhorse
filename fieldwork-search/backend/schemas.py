@@ -7,6 +7,7 @@ class AuthCheck(BaseModel):
 class ChatRequest(BaseModel):
     conversation_id: str | None = None
     message: str = Field(min_length=1, max_length=12000)
+    search_query: str | None = Field(default=None, max_length=2000)
     search_enabled: bool = True
     providers: list[str] = Field(default_factory=lambda: ["exa", "searxng"])
     depth: str = "standard"
