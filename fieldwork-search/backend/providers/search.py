@@ -7,7 +7,7 @@ import httpx
 from ..config import get_settings
 
 TRACKING_KEYS = {"fbclid", "gclid", "mc_cid", "mc_eid"}
-PROVIDER_WEIGHTS = {"exa": 1.25, "searxng": 1.0}
+PROVIDER_WEIGHTS = {"exa": 1.25, "searxng": 1.0, "brave": 1.1, "tavily": 1.1, "serper": 1.0}
 
 def canonical_url(value: str) -> str:
     try:
@@ -27,7 +27,7 @@ def _normalize(item: dict[str, Any], provider: str) -> dict[str, Any] | None:
     url = item.get("url") or item.get("link")
     if not isinstance(url, str) or not url.startswith(("http://", "https://")):
         return None
-    snippets = item.get("highlights") or item.get("content") or item.get("snippet") or ""
+    snippets = item.get("highlights") or item.get("content") or item.get("snippet") or item.get("description") or ""
     snippet = " ".join(str(part) for part in snippets if part) if isinstance(snippets, list) else str(snippets)
     return {
         "title": str(item.get("title") or item.get("name") or url)[:500],
@@ -79,6 +79,58 @@ async def _searxng_search(query: str, depth: str, category: str | None, time_ran
         payload = response.json()
     return [value for value in (_normalize(item, "searxng") for item in (payload.get("results") or [])) if value]
 
+async def _brave_search(query: str, depth: str, timeout_seconds: float) -> list[dict[str, Any]]:
+    settings = get_settings()
+    if not settings.brave_api_key:
+        raise RuntimeError("BRAVE_API_KEY is not configured.")
+    params = {"q": query, "count": 20 if depth == "deep" else 10}
+    async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+        response = await client.get(
+            "https://api.search.brave.com/res/v1/web/search",
+            headers={"X-Subscription-Token": settings.brave_api_key, "Accept": "application/json"},
+            params=params,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    items = (payload.get("web") or {}).get("results") or []
+    return [value for value in (_normalize(item, "brave") for item in items) if value]
+
+
+async def _tavily_search(query: str, depth: str, timeout_seconds: float) -> list[dict[str, Any]]:
+    settings = get_settings()
+    if not settings.tavily_api_key:
+        raise RuntimeError("TAVILY_API_KEY is not configured.")
+    body = {
+        "api_key": settings.tavily_api_key,
+        "query": query,
+        "search_depth": "advanced" if depth == "deep" else "basic",
+        "max_results": 20 if depth == "deep" else 10,
+        "include_answer": False,
+        "include_raw_content": False,
+    }
+    async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+        response = await client.post("https://api.tavily.com/search", json=body)
+        response.raise_for_status()
+        payload = response.json()
+    return [value for value in (_normalize(item, "tavily") for item in (payload.get("results") or [])) if value]
+
+
+async def _serper_search(query: str, depth: str, timeout_seconds: float) -> list[dict[str, Any]]:
+    settings = get_settings()
+    if not settings.serper_api_key:
+        raise RuntimeError("SERPER_API_KEY is not configured.")
+    body = {"q": query, "num": 20 if depth == "deep" else 10}
+    async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+        response = await client.post(
+            "https://google.serper.dev/search",
+            headers={"X-API-KEY": settings.serper_api_key, "Content-Type": "application/json"},
+            json=body,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    return [value for value in (_normalize(item, "serper") for item in (payload.get("organic") or [])) if value]
+
+
 def deduplicate_and_rank(result_sets: list[tuple[str, list[dict[str, Any]]]], limit: int = 24) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
     for provider, items in result_sets:
@@ -109,6 +161,12 @@ async def run_search(query: str, providers: list[str], depth: str = "standard", 
         tasks.append(("exa", _exa_search(query, depth, category, timeout)))
     if "searxng" in providers:
         tasks.append(("searxng", _searxng_search(query, depth, category, time_range, timeout)))
+    if "brave" in providers:
+        tasks.append(("brave", _brave_search(query, depth, timeout)))
+    if "tavily" in providers:
+        tasks.append(("tavily", _tavily_search(query, depth, timeout)))
+    if "serper" in providers:
+        tasks.append(("serper", _serper_search(query, depth, timeout)))
     outcomes = await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
     result_sets: list[tuple[str, list[dict[str, Any]]]] = []
     statuses: list[dict[str, str]] = []
