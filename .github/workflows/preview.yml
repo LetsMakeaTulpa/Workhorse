@@ -9,8 +9,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: workhorse-preview
@@ -41,7 +39,7 @@ jobs:
       - name: Typecheck frontend
         run: npm run typecheck
       - name: Build preview
-        run: npx vite build --base=/Workhorse/
+        run: npx vite build
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
