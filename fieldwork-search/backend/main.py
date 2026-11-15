@@ -3,6 +3,7 @@ from __future__ import annotations
 import hmac
 import json
 import logging
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -15,11 +16,11 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .database import SessionLocal, get_db, init_db
-from .models import Conversation, Message, utcnow
+from .models import Conversation, LibraryItem, Message, utcnow
 from .prompts import DEFAULT_SYSTEM_PROMPT
 from .providers.featherless import FeatherlessProvider
 from .providers.search import run_search
-from .schemas import AuthCheck, ChatRequest, ConversationUpdate, SearchRequest
+from .schemas import AuthCheck, ChatRequest, ConversationUpdate, LibraryCreate, SearchRequest
 from .services.research import prepare_research_turn
 
 logging.basicConfig(level=logging.INFO)
@@ -80,6 +81,18 @@ def _serialize_conversation(item: Conversation, include_messages: bool = False) 
     if include_messages:
         value["messages"] = [_serialize_message(message) for message in item.messages]
     return value
+
+
+
+def _serialize_library(item: LibraryItem) -> dict[str, Any]:
+    try:
+        payload = json.loads(item.payload_json) if item.payload_json else {}
+    except json.JSONDecodeError:
+        payload = {}
+    return {
+        "id": item.id, "kind": item.kind, "title": item.title, "payload": payload,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+    }
 
 
 def _sse(event: str, payload: dict[str, Any]) -> str:
@@ -183,6 +196,42 @@ def delete_conversation(conversation_id: str, db: Session = Depends(get_db)):
     item = db.get(Conversation, conversation_id)
     if not item:
         raise HTTPException(status_code=404, detail="Conversation not found.")
+    db.delete(item)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/api/library", dependencies=[Depends(require_app_access)])
+def list_library(db: Session = Depends(get_db)):
+    items = db.query(LibraryItem).order_by(desc(LibraryItem.created_at)).limit(500).all()
+    return [_serialize_library(item) for item in items]
+
+
+@app.post("/api/library", dependencies=[Depends(require_app_access)])
+def create_library(body: LibraryCreate, db: Session = Depends(get_db)):
+    item = db.get(LibraryItem, body.id) if body.id else None
+    if item is None:
+        item = LibraryItem(
+            id=body.id or str(uuid.uuid4()),
+            kind=body.kind,
+            title=body.title.strip()[:240],
+            payload_json=json.dumps(body.payload, ensure_ascii=False),
+        )
+        db.add(item)
+    else:
+        item.kind = body.kind
+        item.title = body.title.strip()[:240]
+        item.payload_json = json.dumps(body.payload, ensure_ascii=False)
+    db.commit()
+    db.refresh(item)
+    return _serialize_library(item)
+
+
+@app.delete("/api/library/{item_id}", dependencies=[Depends(require_app_access)])
+def delete_library_item(item_id: str, db: Session = Depends(get_db)):
+    item = db.get(LibraryItem, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Library item not found.")
     db.delete(item)
     db.commit()
     return {"ok": True}
