@@ -88,7 +88,7 @@ Dork syntax is passed through as query text. Operator support varies by provider
 
 ## Current persistence boundary
 
-Conversation history is stored by the backend database. Saved-search entries and model/engine/dork presets currently use browser local storage, so they are available in the same browser profile but are not yet synchronized across devices. Share links are read-only snapshots encoded into the URL; they do not expose server credentials.
+Conversation history, saved searches, and model/engine/dork presets are stored by the backend database. Browser local storage keeps a working cache and migrates local items to the server Library on connection. Share links are read-only snapshots encoded into the URL; they do not expose server credentials or yet support revocation.
 
 ## Preview and deployment
 
