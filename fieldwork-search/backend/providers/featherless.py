@@ -32,6 +32,26 @@ class FeatherlessProvider:
         data = payload.get("data", []) if isinstance(payload, dict) else []
         return [item for item in data if isinstance(item, dict) and item.get("id")]
 
+    async def complete_chat(self, model: str, messages: list[dict], temperature: float = 0.1, max_tokens: int = 400) -> str:
+        headers = self._headers()
+        payload = {"model": model, "messages": messages, "temperature": temperature,
+                   "max_tokens": max_tokens, "stream": False}
+        timeout = httpx.Timeout(self.settings.request_timeout_seconds)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{self.settings.featherless_base_url}/chat/completions",
+                headers=headers, json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+        choices = data.get("choices") or []
+        if not choices:
+            raise FeatherlessError("Featherless returned no completion choices.")
+        content = (choices[0].get("message") or {}).get("content")
+        if not isinstance(content, str):
+            raise FeatherlessError("Featherless returned an unsupported completion format.")
+        return content
+
     async def stream_chat(self, model: str, messages: list[dict], temperature: float, max_tokens: int) -> AsyncIterator[str]:
         headers = self._headers()
         payload = {

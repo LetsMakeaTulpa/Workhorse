@@ -14,9 +14,13 @@ class Settings:
     featherless_model_id: str = os.getenv("FEATHERLESS_MODEL_ID", "darkc0de/XORTRON-RICO-v3").strip()
     xortron_agent_model_id: str = os.getenv("XORTRON_AGENT_MODEL_ID", "darkc0de/XORTRON-AgentRICO").strip()
     exa_api_key: str = os.getenv("EXA_API_KEY", "").strip()
+    brave_api_key: str = os.getenv("BRAVE_API_KEY", "").strip()
+    tavily_api_key: str = os.getenv("TAVILY_API_KEY", "").strip()
+    serper_api_key: str = os.getenv("SERPER_API_KEY", "").strip()
     searxng_url: str = os.getenv("SEARXNG_URL", "").strip().rstrip("/")
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./fieldwork.db").strip()
     app_password: str = os.getenv("APP_PASSWORD", "")
+    cors_origins: str = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,https://letsmakeatulpa.github.io").strip()
     request_timeout_seconds: float = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "28"))
 
 @lru_cache(maxsize=1)

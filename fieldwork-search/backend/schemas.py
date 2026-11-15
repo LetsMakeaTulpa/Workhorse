@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 class AuthCheck(BaseModel):
@@ -7,6 +8,7 @@ class AuthCheck(BaseModel):
 class ChatRequest(BaseModel):
     conversation_id: str | None = None
     message: str = Field(min_length=1, max_length=12000)
+    search_query: str | None = Field(default=None, max_length=2000)
     search_enabled: bool = True
     providers: list[str] = Field(default_factory=lambda: ["exa", "searxng"])
     depth: str = "standard"
@@ -20,7 +22,7 @@ class ChatRequest(BaseModel):
     @field_validator("providers")
     @classmethod
     def only_supported_providers(cls, value: list[str]) -> list[str]:
-        allowed = {"exa", "searxng"}
+        allowed = {"exa", "searxng", "brave", "tavily", "serper"}
         return list(dict.fromkeys(p for p in value if p in allowed))
 
 class SearchRequest(BaseModel):
@@ -29,6 +31,19 @@ class SearchRequest(BaseModel):
     depth: str = "standard"
     category: str | None = None
     time_range: str | None = None
+
+class LibraryCreate(BaseModel):
+    id: str | None = Field(default=None, max_length=36)
+    kind: str = Field(min_length=1, max_length=32)
+    title: str = Field(min_length=1, max_length=240)
+    payload: dict[str, Any]
+
+    @field_validator("kind")
+    @classmethod
+    def supported_library_kind(cls, value: str) -> str:
+        if value not in {"saved_search", "preset"}:
+            raise ValueError("Library kind must be saved_search or preset.")
+        return value
 
 class ConversationUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=240)

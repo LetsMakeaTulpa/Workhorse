@@ -3,29 +3,36 @@ from __future__ import annotations
 import hmac
 import json
 import logging
+import uuid
 from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .database import SessionLocal, get_db, init_db
-from .models import Conversation, Message, utcnow
+from .models import Conversation, LibraryItem, Message, utcnow
 from .prompts import DEFAULT_SYSTEM_PROMPT
 from .providers.featherless import FeatherlessProvider
 from .providers.search import run_search
-from .schemas import AuthCheck, ChatRequest, ConversationUpdate, SearchRequest
+from .schemas import AuthCheck, ChatRequest, ConversationUpdate, LibraryCreate, SearchRequest
 from .services.research import prepare_research_turn
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fieldwork")
 
-app = FastAPI(title="FIELDWORK Research", docs_url=None, redoc_url=None)
+app = FastAPI(title="Workhorse Search", docs_url=None, redoc_url=None)
+_origins = [origin.strip() for origin in get_settings().cors_origins.split(",") if origin.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=_origins, allow_credentials=False,
+                   allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+                   allow_headers=["Content-Type", "X-App-Password"])
 STATIC_DIR = Path(__file__).parent / "static"
+DIST_DIR = Path(__file__).resolve().parents[2] / "dist"
 
 
 @app.on_event("startup")
@@ -77,12 +84,27 @@ def _serialize_conversation(item: Conversation, include_messages: bool = False) 
     return value
 
 
+
+def _serialize_library(item: LibraryItem) -> dict[str, Any]:
+    try:
+        payload = json.loads(item.payload_json) if item.payload_json else {}
+    except json.JSONDecodeError:
+        payload = {}
+    return {
+        "id": item.id, "kind": item.kind, "title": item.title, "payload": payload,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+    }
+
+
 def _sse(event: str, payload: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 @app.get("/", include_in_schema=False)
 def home():
+    built_frontend = DIST_DIR / "index.html"
+    if built_frontend.exists():
+        return FileResponse(built_frontend)
     return FileResponse(STATIC_DIR / "index.html")
 
 
@@ -108,6 +130,9 @@ def app_config():
         "featherless_configured": bool(settings.featherless_api_key),
         "exa_configured": bool(settings.exa_api_key),
         "searxng_configured": bool(settings.searxng_url),
+        "brave_configured": bool(settings.brave_api_key),
+        "tavily_configured": bool(settings.tavily_api_key),
+        "serper_configured": bool(settings.serper_api_key),
         "preferred_model": settings.featherless_model_id,
         "agent_model": settings.xortron_agent_model_id,
         "system_prompt": DEFAULT_SYSTEM_PROMPT,
@@ -180,6 +205,42 @@ def delete_conversation(conversation_id: str, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@app.get("/api/library", dependencies=[Depends(require_app_access)])
+def list_library(db: Session = Depends(get_db)):
+    items = db.query(LibraryItem).order_by(desc(LibraryItem.created_at)).limit(500).all()
+    return [_serialize_library(item) for item in items]
+
+
+@app.post("/api/library", dependencies=[Depends(require_app_access)])
+def create_library(body: LibraryCreate, db: Session = Depends(get_db)):
+    item = db.get(LibraryItem, body.id) if body.id else None
+    if item is None:
+        item = LibraryItem(
+            id=body.id or str(uuid.uuid4()),
+            kind=body.kind,
+            title=body.title.strip()[:240],
+            payload_json=json.dumps(body.payload, ensure_ascii=False),
+        )
+        db.add(item)
+    else:
+        item.kind = body.kind
+        item.title = body.title.strip()[:240]
+        item.payload_json = json.dumps(body.payload, ensure_ascii=False)
+    db.commit()
+    db.refresh(item)
+    return _serialize_library(item)
+
+
+@app.delete("/api/library/{item_id}", dependencies=[Depends(require_app_access)])
+def delete_library_item(item_id: str, db: Session = Depends(get_db)):
+    item = db.get(LibraryItem, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Library item not found.")
+    db.delete(item)
+    db.commit()
+    return {"ok": True}
+
+
 @app.post("/api/search", dependencies=[Depends(require_app_access)])
 async def manual_search(body: SearchRequest):
     return await run_search(body.query, providers=body.providers, depth=body.depth,
@@ -221,8 +282,10 @@ async def chat_stream(body: ChatRequest):
                 question=body.message, history=history, providers=body.providers,
                 search_enabled=body.search_enabled, depth=body.depth, category=body.category,
                 time_range=body.time_range, system_prompt=body.system_prompt,
+                search_query=body.search_query, model=model,
             )
             sources, provider_status = prepared["sources"], prepared["providers"]
+            yield _sse("plan", {"queries": prepared.get("search_plan", [])})
             yield _sse("sources", {"items": sources, "providers": provider_status})
 
             answer_parts: list[str] = []
@@ -252,4 +315,6 @@ async def chat_stream(body: ChatRequest):
         headers={"Cache-Control": "no-cache, no-transform", "Connection": "keep-alive", "X-Accel-Buffering": "no"})
 
 
+if (DIST_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
