@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -24,7 +25,11 @@ from .services.research import prepare_research_turn
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fieldwork")
 
-app = FastAPI(title="FIELDWORK Research", docs_url=None, redoc_url=None)
+app = FastAPI(title="Workhorse Search", docs_url=None, redoc_url=None)
+_origins = [origin.strip() for origin in get_settings().cors_origins.split(",") if origin.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=_origins, allow_credentials=False,
+                   allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+                   allow_headers=["Content-Type", "X-App-Password"])
 STATIC_DIR = Path(__file__).parent / "static"
 
 
@@ -221,6 +226,7 @@ async def chat_stream(body: ChatRequest):
                 question=body.message, history=history, providers=body.providers,
                 search_enabled=body.search_enabled, depth=body.depth, category=body.category,
                 time_range=body.time_range, system_prompt=body.system_prompt,
+                search_query=body.search_query,
             )
             sources, provider_status = prepared["sources"], prepared["providers"]
             yield _sse("sources", {"items": sources, "providers": provider_status})
