@@ -16,7 +16,7 @@ const KEYS={presets:'workhorse.presets.v1',saved:'workhorse.saved.v1',config:'wo
 function readStore<T>(key:string,fallback:T):T{try{const v=localStorage.getItem(key);return v?JSON.parse(v) as T:fallback}catch{return fallback}}
 function uid(){return crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(16).slice(2)}
 function html(text:string){return DOMPurify.sanitize(marked.parse(text||'',{breaks:true,gfm:true}) as string,{ADD_ATTR:['target','rel']})}
-function dorkQuery(q:string,dorks:Dork[]){return [q.trim(),...dorks.map(d=>d.operator==='"'?('"'+d.value.replaceAll('"','')+'"'):d.operator==='-'?('-'+d.value.replace(/^-+/,'')):d.operator+d.value.trim())].filter(Boolean).join(' ')}
+function dorkQuery(q:string,dorks:Dork[]){return [q.trim(),...dorks.map(d=>d.operator==='"'?('"'+d.value.replace(/"/g,'')+'"'):d.operator==='-'?('-'+d.value.replace(/^-+/,'')):d.operator+d.value.trim())].filter(Boolean).join(' ')}
 function followups(text:string){return [...text.matchAll(/(?:^|\n)\s*(?:[-*•]|\d+[.)])\s+(.+\?)\s*$/gm)].map(m=>m[1].replace(/\*\*/g,'').trim()).slice(-4)}
 
 export default function SearchApp(){
