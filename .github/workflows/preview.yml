@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fieldwork-unified
+      - workhorse-search-engine-skills
   workflow_dispatch:
 
 permissions:
