@@ -16,6 +16,8 @@ services:
         sync: false
       - key: APP_PASSWORD
         sync: false
+      - key: CORS_ORIGINS
+        value: http://localhost:5173,http://127.0.0.1:5173,https://letsmakeatulpa.github.io
       - key: DATABASE_URL
         sync: false
       - key: FEATHERLESS_MODEL_ID
