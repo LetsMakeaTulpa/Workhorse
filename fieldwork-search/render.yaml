@@ -12,6 +12,12 @@ services:
         sync: false
       - key: EXA_API_KEY
         sync: false
+      - key: BRAVE_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: SERPER_API_KEY
+        sync: false
       - key: SEARXNG_URL
         sync: false
       - key: APP_PASSWORD
